@@ -14,8 +14,8 @@ from datetime import datetime
 
 DEVICES = {
     # Device name (Windows) or address (MacOS)
-    "user0": "Sender_1",
-    "user1": "Sender_2",
+    "user1": "Sender_1",
+    "user2": "Sender_2",
 }
 
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
@@ -28,7 +28,7 @@ FLAG_LAST_CHUNK = 0x01
 MAX_CHUNK_PAYLOAD = 180
 
 # ===== FL weight =====
-ratio_user1 = 0.5   # user1 weight (user0 = 1 - ratio_user1)
+ratio_user2 = 0.5   # user2 weight (user1 = 1 - ratio_user2)
 
 # ===== Global state =====
 clients: Dict[str, BleakClient] = {}  # user_id -> BleakClient
@@ -41,7 +41,7 @@ broadcast_queue: Optional[asyncio.Queue] = None  # Triggers global weight broadc
 # write `.h`
 # =========================================================
 
-def write_weights_to_h(weights: np.ndarray, name: str, out_dir="ble_weights"):
+def write_weights_to_h(weights: np.ndarray, name: str, out_dir=f"ble_weights_{ratio_user2}"):
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"{name}.h")
 
@@ -130,17 +130,17 @@ class FLState:
             return None
 
         # check if empty
-        if self.queues["user0"].empty() or self.queues["user1"].empty():
+        if self.queues["user1"].empty() or self.queues["user2"].empty():
             return None
 
         try:
-            sid0, w0 = self.queues["user0"].get_nowait()
-            sid1, w1 = self.queues["user1"].get_nowait()
+            sid0, w0 = self.queues["user1"].get_nowait()
+            sid1, w1 = self.queues["user2"].get_nowait()
 
-            print(f"🔗 Matched for aggregation: user0(session={sid0}) + user1(session={sid1})")
+            print(f"🔗 Matched for aggregation: user1(session={sid0}) + user2(session={sid1})")
 
             # perform FedAvg
-            w = (1 - ratio_user1) * w0 + ratio_user1 * w1
+            w = (1 - ratio_user2) * w0 + ratio_user2 * w1
 
             return w
 
@@ -421,8 +421,8 @@ async def main():
     
     # initialize queue of FLState
     fl_state.queues = {
-        "user0": asyncio.Queue(),
         "user1": asyncio.Queue(),
+        "user2": asyncio.Queue(),
     }
 
     # Start background broadcast worker

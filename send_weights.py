@@ -12,17 +12,17 @@ from bleak import BleakClient, BleakScanner
 
 
 DEVICES = {
-    "user0": "Sender_1",   # or MAC address (for MacOS user)
-    "user1": "Sender_2",
+    "user1": "Sender_1",   # or MAC address (for MacOS user)
+    "user2": "Sender_2",
 }
 
 # stored model weights.h you want to distribute back to devices
-WEIGHTS_PATH = "ble_weights/global_fedavg_round6.h"
+WEIGHTS_PATH = "ble_weights/global_fedavg_round10.h"
 
 SERVICE_UUID = "19B10000-E8F2-537E-4F6C-D104768A1214"
 WRITE_UUID = "19B10002-E8F2-537E-4F6C-D104768A1214"
 
-SESSION_ID = 6                 # session_id sent to MCU
+SESSION_ID = 10                 # session_id sent to MCU
 MAX_CHUNK_PAYLOAD = 180
 HEADER_SIZE = 11
 FLAG_LAST_CHUNK = 0x01
