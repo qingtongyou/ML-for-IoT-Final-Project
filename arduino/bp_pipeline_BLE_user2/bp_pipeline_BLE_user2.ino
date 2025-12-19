@@ -1,4 +1,4 @@
-/* 
+/*
  * Integrated training and inference pipeline.
  *
  * - Training and inference use separate weight buffers
@@ -32,6 +32,12 @@
 #define DEBUG_MODE
 #define ENABLE_ENERGY_PRINT
 
+// LED pin for on/off control
+#define LED_PIN 11  // pin LED(D11)
+
+// Threshold for treating prediction as "unknown"
+const float SOFTMAX_UNKNOWN_THRESHOLD = 0.6f;
+
 // Check NaN/Inf in debug mode, detect invalid float values
 #ifdef DEBUG_MODE
   inline bool isInvalidNumber(float x) {
@@ -57,8 +63,10 @@ extern const int classes_cnt;
 // NN structure configuration
 static const unsigned int NN_def[] = {first_layer_input_cnt, 32, 16, classes_cnt};
 
-// #include "normalization_params_user1_mode0.h"   // stored training mean + std, for realtime inference
-#include "normalization_params_global.h"
+// Stored training mean + std, for realtime inference
+#include "normalization_params_user2_mode0.h"   // Use this if single-user mode
+// #include "normalization_params_global_a0.65.h"     // Use this if FL mode
+
 #include "NN_functions_modified.h"
 
 int iter_cnt = 0;  // count epoch
@@ -91,7 +99,7 @@ bool ble_send_enabled = false;  // control BLE weights sending
 // ==================== Energy-based trigger parameters ====================
 #define ENERGY_WINDOW_MS 50.0f    // Monitoring window (50 ms)
 #define ENERGY_WINDOW_SAMPLES (int)(ENERGY_WINDOW_MS * SAMPLE_RATE / 1000.0f)  // 800 samples @ 16kHz
-#define ENERGY_THRESHOLD 400.0f   // Energy threshold
+#define ENERGY_THRESHOLD 500.0f   // Energy threshold
 #define ENERGY_CHECK_INTERVAL_MS 20  // Check energy every 20 ms
 
 // Audio record params
@@ -131,6 +139,11 @@ Mode currentMode = MODE_IDLE;
 DATA_TYPE* WeightBiasPtr_training = NULL;
 DATA_TYPE* WeightBiasPtr_inference = NULL;
 int weights_bias_cnt = 0;     // total number of weights
+// =========================================================
+
+// ==================== Inference status ====================
+// Store maximum softmax probability of last inference
+float g_max_softmax_prob = 0.0f;
 // =========================================================
 
 // ==================== MFE feature extraction ====================
@@ -405,6 +418,9 @@ int inference(float* features) {
       predicted_class = j;
     }
   }
+
+  // record max softmax probability of this inference
+  g_max_softmax_prob = (float)max_prob;
   
   return predicted_class;
 }
@@ -424,16 +440,25 @@ void printInferenceResult(int predicted_class) {
     Serial.print(OUT_VEC_SIZE - 1);
     Serial.print(")");
   } else {
-    
-    if (predicted_class < class_names_size) {
-      Serial.print("Predicted: ");
-      Serial.print(class_names[predicted_class]);
+    // Confidence-based rejection
+    if (g_max_softmax_prob <= SOFTMAX_UNKNOWN_THRESHOLD) {
+      Serial.print("Predicted: unknown");
+      Serial.print(" (max_prob=");
+      Serial.print(g_max_softmax_prob, 4);
+      Serial.print(")");
     } else {
-      Serial.print("Predicted: <UNNAMED>");
+      if (predicted_class < class_names_size) {
+        Serial.print("Predicted: ");
+        Serial.print(class_names[predicted_class]);
+      } else {
+        Serial.print("Predicted: <UNNAMED>");
+      }
+      Serial.print(" (class ");
+      Serial.print(predicted_class);
+      Serial.print(")");
+      Serial.print(" | max_prob=");
+      Serial.print(g_max_softmax_prob, 4);
     }
-    Serial.print(" (class ");
-    Serial.print(predicted_class);
-    Serial.print(")");
   }
   
   Serial.print(" | Probabilities: [");
@@ -442,6 +467,31 @@ void printInferenceResult(int predicted_class) {
     if (j < OUT_VEC_SIZE - 1) Serial.print(", ");
   }
   Serial.println("]");
+}
+
+// Control LED according to inference result and confidence
+void handleLedAfterInference(int predicted_class) {
+  // if confidence is not high enough, consider it unknown, do not change LED state
+  if (g_max_softmax_prob <= SOFTMAX_UNKNOWN_THRESHOLD) {
+    Serial.println("LED: prediction is unknown, LED state unchanged.");
+    return;
+  }
+
+  //  0 -> "on", 1 -> "off"
+  if (predicted_class == 0) {
+    // light on
+    digitalWrite(LED_PIN, HIGH);
+    Serial.println("LED: ON (class = on)");
+  } else if (predicted_class == 1) {
+    //  light off
+    digitalWrite(LED_PIN, LOW);
+    Serial.println("LED: OFF (class = off)");
+  } else {
+    // other classes, not handled, keep current state
+    Serial.print("LED: unhandled class index ");
+    Serial.print(predicted_class);
+    Serial.println(", LED state unchanged.");
+  }
 }
 
 // ==================== Training Function ====================
@@ -871,6 +921,13 @@ void handleIncomingWeights(const uint8_t* data, int length) {
   }
   Serial.println();
 
+  // Load training weights to network L and calculate accuracy
+  Serial.println("\n=== Calculating Accuracy with Received Global Weights ===");
+  WeightBiasPtr = WeightBiasPtr_training;
+  packUnpackVector(UNPACK);
+  printAccuracy();
+  Serial.println("===========================================================\n");
+
   resetBleRxState();
 }
 
@@ -890,8 +947,8 @@ bool initBLE() {
   }
   
   // Set Name
-  BLE.setLocalName("Sender_1");
-  BLE.setDeviceName("Sender_1");
+  BLE.setLocalName("Sender_2");
+  BLE.setDeviceName("Sender_2");
   
   // Set advertised service UUID
   BLE.setAdvertisedService(weightService);
@@ -907,7 +964,7 @@ bool initBLE() {
   BLE.advertise();
   
   Serial.println("BLE initialized successfully!");
-  Serial.println("Device name: Sender_1");
+  Serial.println("Device name: Sender_2");
   Serial.println("BLE is now advertising...");
   
   return true;
@@ -1078,6 +1135,10 @@ void setup() {
   #endif
   
   Serial.println("=== Training and Inference Pipeline ===");
+
+  // led initial setup
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, LOW);  // default off state at startup
   
   Serial.println("\n=== Initializing BLE ===");
   if (initBLE()) {
@@ -1288,6 +1349,8 @@ void loop() {
       
       if (predicted >= 0) {
         printInferenceResult(predicted);
+        // led control
+        handleLedAfterInference(predicted);
       } else {
         #ifdef DEBUG_MODE
           Serial.println("ERROR: Inference failed!");
