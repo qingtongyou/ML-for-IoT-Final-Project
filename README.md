@@ -37,7 +37,7 @@ Each MCU performs local audio recording, feature extraction, on-device training,
 
 ## How to Run
 
-1. Flash the [Arduino code](arduino\bp_pipeline_BLE_user1) to two Nano 33 BLE Sense boards
+1. Flash the [Arduino code](arduino/bp_pipeline_BLE_user1) to two Nano 33 BLE Sense boards
 2. Wait for BLE initialization
 3. Run the Python [BLE aggregator](ble_fl_loop_fedprox.py) on PC
 4. Trigger local training via serial command ('t')
