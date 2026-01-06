@@ -4,6 +4,8 @@ This code was developed as part of the EITP40 Final Project by Group 7. This pro
 
 🎥 Demo Video: https://youtu.be/Rm9dUJWAwe0
 
+📑 Slides: [Project presentation slides (pptx)](pre_slide_no_video.pptx)
+
 **Key features:**
 - Fully on-device training and real-time inference on Arduino Nano 33 BLE Sense
 - Audio feature extraction with MFE
