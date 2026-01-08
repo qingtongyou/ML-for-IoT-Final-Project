@@ -2,7 +2,7 @@
 
 This code was developed as part of the EITP40 Final Project by Group 7. This prototype is able to identify 'on' and 'off' speech commands and give real-time response by automatically turning on/off the LED on an externally connected breadboard.
 
-🎥 Demo Video: https://youtu.be/Rm9dUJWAwe0
+🎥 Demo Video: https://youtu.be/8saZ63O-WBo
 
 📑 Slides: [Project presentation slides (pptx)](pre_slide_no_video.pptx)
 
